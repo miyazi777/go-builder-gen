@@ -3,6 +3,8 @@ package main
 import (
 	//"flag"
 
+	"fmt"
+	"os"
 	"test1/generator"
 )
 
@@ -17,5 +19,10 @@ func main() {
 	//	fmt.Printf("Source path: %s\n", *sourceFilePath)
 
 	gen := generator.NewGenerator("./model/item.go", "Item")
-	gen.Generate()
+	err := gen.Generate()
+	if err != nil {
+		fmt.Errorf("Failed to generate: %v", err)
+		os.Exit(1)
+	}
+	os.Exit(0)
 }
