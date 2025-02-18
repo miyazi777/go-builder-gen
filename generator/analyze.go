@@ -17,7 +17,7 @@ func AnalyzeStruct(filePath string, targetStruct string) TargetStruct {
 	}
 
 	packageName := ""
-	targetields := []TargetField{}
+	targetFields := []TargetField{}
 	astutil.Apply(node, nil, func(c *astutil.Cursor) bool {
 		n := c.Node()
 
@@ -43,7 +43,7 @@ func AnalyzeStruct(filePath string, targetStruct string) TargetStruct {
 		for _, field := range structType.Fields.List {
 			for _, name := range field.Names {
 				typeStr := getFieldType(field.Type)
-				targetields = append(targetields, TargetField{
+				targetFields = append(targetFields, TargetField{
 					Name: name.Name,
 					Type: typeStr,
 				})
@@ -55,7 +55,7 @@ func AnalyzeStruct(filePath string, targetStruct string) TargetStruct {
 	gs := TargetStruct{
 		PackageName: packageName,
 		StructName:  targetStruct,
-		Fields:      targetields,
+		Fields:      targetFields,
 	}
 	return gs
 }
