@@ -15,9 +15,6 @@ func main() {
 
 	flag.Parse()
 
-	fmt.Printf("Target struct: %s\n", *structName)
-	fmt.Printf("Source path: %s\n", *sourceFilePath)
-
 	gen := generator.NewGenerator(*sourceFilePath, *structName)
 	err := gen.Generate()
 	if err != nil {
