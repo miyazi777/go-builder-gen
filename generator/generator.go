@@ -10,8 +10,8 @@ import (
 )
 
 type Generator struct {
-	TargetFilePath string
-	TargetStruct   TargetStruct
+	targetFilePath string
+	targetStruct   TargetStruct
 }
 
 func NewGenerator(filePath string, targetStruct string) *Generator {
@@ -19,8 +19,8 @@ func NewGenerator(filePath string, targetStruct string) *Generator {
 	ts := AnalyzeStruct(filePath, targetStruct)
 
 	return &Generator{
-		TargetFilePath: filePath,
-		TargetStruct:   ts,
+		targetFilePath: filePath,
+		targetStruct:   ts,
 	}
 }
 
@@ -43,13 +43,13 @@ func (g *Generator) Generate() error {
 }
 
 func (g *Generator) generateBuilder() *jen.File {
-	ts := g.TargetStruct
+	ts := g.targetStruct
 	// ファイルオブジェクト作成
-	f := jen.NewFile(ts.PackageName)
+	f := jen.NewFile(ts.packageName)
 
 	// Builder struct作成
 	f.Type().Id(ts.GetBuilderName()).Struct(
-		jen.Id("d").Id(ts.StructName),
+		jen.Id("d").Id(ts.structName),
 	)
 
 	// NewBuilder function作成
@@ -58,13 +58,13 @@ func (g *Generator) generateBuilder() *jen.File {
 	)
 
 	// setter作成
-	for _, field := range ts.Fields {
+	for _, field := range ts.fields {
 		f.Func().Params(
 			jen.Id("b").Op("*").Id(ts.GetBuilderName()),
 		).Id(field.GetSetterName()).Params(
-			jen.Id(field.Name).Id(field.Type),
+			jen.Id(field.name).Id(field.typeName),
 		).Op("*").Id(ts.GetBuilderName()).Block(
-			jen.Id("b").Dot("d").Dot(field.Name).Op("=").Id(field.Name),
+			jen.Id("b").Dot("d").Dot(field.name).Op("=").Id(field.name),
 			jen.Return(jen.Id("b")),
 		)
 	}
@@ -72,7 +72,7 @@ func (g *Generator) generateBuilder() *jen.File {
 	// readbuild作成
 	f.Func().Params(
 		jen.Id("b").Op("*").Id(ts.GetBuilderName()),
-	).Id("ReadBuild").Params().Op("*").Id(ts.StructName).Block(
+	).Id("ReadBuild").Params().Op("*").Id(ts.structName).Block(
 		jen.Return(jen.Op("&").Id("b").Dot("d")),
 	)
 
@@ -80,30 +80,30 @@ func (g *Generator) generateBuilder() *jen.File {
 	f.Func().Params(
 		jen.Id("b").Op("*").Id(ts.GetBuilderName()),
 	).Id("Clone").Params(
-		jen.Id("src").Op("*").Id(ts.StructName),
-	).Op("*").Id(ts.StructName).Block(ts.GetMoveFieldStatement()...)
+		jen.Id("src").Op("*").Id(ts.structName),
+	).Op("*").Id(ts.GetBuilderName()).Block(ts.GetMoveFieldStatement()...)
 
 	return f
 }
 
 func (g *Generator) getTargetDir() string {
-	return filepath.Dir(g.TargetFilePath)
+	return filepath.Dir(g.targetFilePath)
 }
 
 func (g *Generator) getBuilderFileName() string {
-	baseNameWithExt := filepath.Base(g.TargetFilePath)
+	baseNameWithExt := filepath.Base(g.targetFilePath)
 	baseName := strings.TrimSuffix(baseNameWithExt, filepath.Ext(baseNameWithExt))
 	return fmt.Sprintf("%s_builder.go", baseName)
 }
 
 type TargetStruct struct {
-	PackageName string
-	StructName  string
-	Fields      []TargetField
+	packageName string
+	structName  string
+	fields      []TargetField
 }
 
 func (t *TargetStruct) GetBuilderName() string {
-	return fmt.Sprintf("%sBuilder", t.StructName)
+	return fmt.Sprintf("%sBuilder", t.structName)
 }
 
 func (t *TargetStruct) GetNewBuilderName() string {
@@ -112,18 +112,18 @@ func (t *TargetStruct) GetNewBuilderName() string {
 
 func (t *TargetStruct) GetMoveFieldStatement() []jen.Code {
 	codes := []jen.Code{}
-	for _, field := range t.Fields {
-		codes = append(codes, jen.Id("b").Dot("d").Dot(field.Name).Op("=").Id("src").Dot(field.Name))
+	for _, field := range t.fields {
+		codes = append(codes, jen.Id("b").Dot("d").Dot(field.name).Op("=").Id("src").Dot(field.name))
 	}
-	codes = append(codes, jen.Return(jen.Op("&").Id("b").Dot("d")))
+	codes = append(codes, jen.Return(jen.Id("b")))
 	return codes
 }
 
 type TargetField struct {
-	Name string
-	Type string
+	name     string
+	typeName string
 }
 
 func (f *TargetField) GetSetterName() string {
-	return "Set" + strings.ToUpper(f.Name[:1]) + f.Name[1:]
+	return "Set" + strings.ToUpper(f.name[:1]) + f.name[1:]
 }

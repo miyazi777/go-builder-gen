@@ -3,22 +3,22 @@ package main
 import (
 	//"flag"
 
+	"flag"
 	"fmt"
 	"os"
 	"test1/generator"
 )
 
 func main() {
-	// TODO: 引数を受け取る
-	//	structName := flag.String("struct", "", "target struct name")
-	//	sourceFilePath := flag.String("path", "", "source file path")
-	//
-	//	flag.Parse()
-	//
-	//	fmt.Printf("Target struct: %s\n", *structName)
-	//	fmt.Printf("Source path: %s\n", *sourceFilePath)
+	structName := flag.String("struct", "", "target struct name")
+	sourceFilePath := flag.String("path", "", "source file path")
 
-	gen := generator.NewGenerator("./model/item.go", "Item")
+	flag.Parse()
+
+	fmt.Printf("Target struct: %s\n", *structName)
+	fmt.Printf("Source path: %s\n", *sourceFilePath)
+
+	gen := generator.NewGenerator(*sourceFilePath, *structName)
 	err := gen.Generate()
 	if err != nil {
 		fmt.Errorf("Failed to generate: %v", err)

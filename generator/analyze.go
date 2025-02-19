@@ -44,8 +44,8 @@ func AnalyzeStruct(filePath string, targetStruct string) TargetStruct {
 			for _, name := range field.Names {
 				typeStr := getFieldType(field.Type)
 				targetFields = append(targetFields, TargetField{
-					Name: name.Name,
-					Type: typeStr,
+					name:     name.Name,
+					typeName: typeStr,
 				})
 			}
 		}
@@ -53,9 +53,9 @@ func AnalyzeStruct(filePath string, targetStruct string) TargetStruct {
 	})
 
 	gs := TargetStruct{
-		PackageName: packageName,
-		StructName:  targetStruct,
-		Fields:      targetFields,
+		packageName: packageName,
+		structName:  targetStruct,
+		fields:      targetFields,
 	}
 	return gs
 }
