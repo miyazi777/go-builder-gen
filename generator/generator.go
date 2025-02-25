@@ -1,78 +1,83 @@
 package generator
 
 import (
+	"bytes"
 	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
+	"regexp"
+	"test1/constant"
+	"test1/file"
+	"test1/targetstruct"
 
 	"github.com/dave/jennifer/jen"
 )
 
 type Generator struct {
-	targetFilePath string
-	targetStruct   TargetStruct
+	sourceFile  *file.SourceFile
+	builderFile *file.BuilderFile
 }
 
-func NewGenerator(filePath string, targetStruct string) *Generator {
-	// 構造体を解析する
-	ts := AnalyzeStruct(filePath, targetStruct)
-
-	return &Generator{
-		targetFilePath: filePath,
-		targetStruct:   ts,
-	}
+func NewGenerator(sourceFile *file.SourceFile, builderFile *file.BuilderFile) *Generator {
+	return &Generator{sourceFile: sourceFile, builderFile: builderFile}
 }
 
 func (g *Generator) Generate() error {
-	f := g.generateBuilder()
+	// analyze
+	ts := g.sourceFile.Analyze()
 
-	outputFile := filepath.Join(g.getTargetDir(), g.getBuilderFileName())
+	// generate
+	f := g.generate(ts)
 
-	err := os.MkdirAll(g.getTargetDir(), 0755)
-	if err != nil {
-		fmt.Printf("Failed to create directory: %v\n", err)
+	// convert
+	buf := new(bytes.Buffer)
+	if err := f.Render(buf); err != nil {
 		return err
 	}
+	code := g.convert(buf.String())
 
-	if err := f.Save(outputFile); err != nil {
-		fmt.Printf("Failed to save file: %v\n", err)
+	// output
+	err := g.output(code)
+	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (g *Generator) generateBuilder() *jen.File {
-	ts := g.targetStruct
+func (g *Generator) removeBeforeCommonLine(code string) string {
+	// 正規表現を使用して// Code generatedから始まる行以降のすべてのコードを抽出
+	regex := regexp.MustCompile(`(?m)^\s*\/\/ Code generated.*$[\s\S]*`)
+	matches := regex.FindString(code)
+	return matches
+}
+
+func (g *Generator) generate(ts targetstruct.TargetStruct) *jen.File {
 	// ファイルオブジェクト作成
-	f := jen.NewFile(ts.packageName)
+	f := jen.NewFile(ts.PackageName())
+
+	// コメント追加
+	f.Comment(constant.COMMENT)
 
 	// Builder struct作成
 	f.Type().Id(ts.GetBuilderName()).Struct(
-		jen.Id("d").Id(ts.structName),
-	)
-
-	// NewBuilder function作成
-	f.Func().Id(ts.GetNewBuilderName()).Params().Op("*").Id(ts.GetBuilderName()).Block(
-		jen.Return(jen.Op("&").Id(ts.GetBuilderName()).Block()),
+		jen.Id("d").Id(ts.StructName()),
 	)
 
 	// setter作成
-	for _, field := range ts.fields {
+	for _, field := range ts.Fields() {
 		f.Func().Params(
 			jen.Id("b").Op("*").Id(ts.GetBuilderName()),
 		).Id(field.GetSetterName()).Params(
-			jen.Id(field.name).Id(field.typeName),
+			jen.Id(field.Name()).Id(field.TypeName()),
 		).Op("*").Id(ts.GetBuilderName()).Block(
-			jen.Id("b").Dot("d").Dot(field.name).Op("=").Id(field.name),
+			jen.Id("b").Dot("d").Dot(field.Name()).Op("=").Id(field.Name()),
 			jen.Return(jen.Id("b")),
 		)
 	}
 
-	// readbuild作成
+	// readBuild作成
 	f.Func().Params(
 		jen.Id("b").Op("*").Id(ts.GetBuilderName()),
-	).Id("ReadBuild").Params().Op("*").Id(ts.structName).Block(
+	).Id("ReadBuild").Params().Op("*").Id(ts.StructName()).Block(
 		jen.Return(jen.Op("&").Id("b").Dot("d")),
 	)
 
@@ -80,50 +85,58 @@ func (g *Generator) generateBuilder() *jen.File {
 	f.Func().Params(
 		jen.Id("b").Op("*").Id(ts.GetBuilderName()),
 	).Id("Clone").Params(
-		jen.Id("src").Op("*").Id(ts.structName),
-	).Op("*").Id(ts.GetBuilderName()).Block(ts.GetMoveFieldStatement()...)
+		jen.Id("src").Op("*").Id(ts.StructName()),
+	).Op("*").Id(ts.GetBuilderName()).Block(g.GetMoveFieldStatement(ts)...)
+
+	// コメント追加
+	f.Comment(constant.COMMENT)
 
 	return f
 }
 
-func (g *Generator) getTargetDir() string {
-	return filepath.Dir(g.targetFilePath)
-}
-
-func (g *Generator) getBuilderFileName() string {
-	baseNameWithExt := filepath.Base(g.targetFilePath)
-	baseName := strings.TrimSuffix(baseNameWithExt, filepath.Ext(baseNameWithExt))
-	return fmt.Sprintf("%s_builder.go", baseName)
-}
-
-type TargetStruct struct {
-	packageName string
-	structName  string
-	fields      []TargetField
-}
-
-func (t *TargetStruct) GetBuilderName() string {
-	return fmt.Sprintf("%sBuilder", t.structName)
-}
-
-func (t *TargetStruct) GetNewBuilderName() string {
-	return fmt.Sprintf("New%s", t.GetBuilderName())
-}
-
-func (t *TargetStruct) GetMoveFieldStatement() []jen.Code {
+func (g *Generator) GetMoveFieldStatement(ts targetstruct.TargetStruct) []jen.Code {
 	codes := []jen.Code{}
-	for _, field := range t.fields {
-		codes = append(codes, jen.Id("b").Dot("d").Dot(field.name).Op("=").Id("src").Dot(field.name))
+	for _, field := range ts.Fields() {
+		codes = append(codes, jen.Id("b").Dot("d").Dot(field.Name()).Op("=").Id("src").Dot(field.Name()))
 	}
 	codes = append(codes, jen.Return(jen.Id("b")))
 	return codes
 }
 
-type TargetField struct {
-	name     string
-	typeName string
+func (g *Generator) convert(code string) string {
+	// 新規作成時は何もしない
+	if !g.builderFile.IsExistFile() {
+		return code
+	}
+
+	// 既存ファイルの最初のコメントよりも前の部分を取得
+	beforeLines := g.builderFile.GetBeforeCommentLines()
+
+	// 生成コードの最初のコメント以降の部分を取得
+	filteredCode := g.removeBeforeCommonLine(code)
+
+	// 既存ファイルの２つ目のコメント以降を取得
+	afterLines := g.builderFile.GetAfterCommentLines()
+
+	return beforeLines + filteredCode + afterLines
 }
 
-func (f *TargetField) GetSetterName() string {
-	return "Set" + strings.ToUpper(f.name[:1]) + f.name[1:]
+func (g *Generator) output(code string) error {
+	err := os.MkdirAll(g.builderFile.GetTargetDir(), 0755)
+	if err != nil {
+		fmt.Printf("Failed to create directory: %v\n", err)
+		return err
+	}
+
+	file, err := os.Create(g.builderFile.GetTargetFilePath())
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	_, err = file.Write(bytes.NewBufferString(code).Bytes())
+	if err != nil {
+		return err
+	}
+	return nil
 }

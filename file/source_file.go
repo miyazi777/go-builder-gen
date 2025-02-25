@@ -1,23 +1,33 @@
-package generator
+package file
 
 import (
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"log"
+	ts "test1/targetstruct"
 
 	"golang.org/x/tools/go/ast/astutil"
 )
 
-func AnalyzeStruct(filePath string, targetStruct string) TargetStruct {
+type SourceFile struct {
+	path       string
+	structName string
+}
+
+func NewSourceFile(path, structName string) *SourceFile {
+	return &SourceFile{path: path, structName: structName}
+}
+
+func (s *SourceFile) Analyze() ts.TargetStruct {
 	fset := token.NewFileSet()
-	node, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
+	node, err := parser.ParseFile(fset, s.path, nil, parser.ParseComments)
 	if err != nil {
 		log.Fatalf("Failed to parse file: %v", err)
 	}
 
 	packageName := ""
-	targetFields := []TargetField{}
+	targetFields := []ts.TargetField{}
 	astutil.Apply(node, nil, func(c *astutil.Cursor) bool {
 		n := c.Node()
 
@@ -30,7 +40,7 @@ func AnalyzeStruct(filePath string, targetStruct string) TargetStruct {
 		}
 
 		// 指定した構造体以外はスキップ
-		if typeSpec.Name.Name != targetStruct {
+		if typeSpec.Name.Name != s.structName {
 			return true
 		}
 
@@ -42,22 +52,14 @@ func AnalyzeStruct(filePath string, targetStruct string) TargetStruct {
 		// 構造体のフィールド名と型名を取得
 		for _, field := range structType.Fields.List {
 			for _, name := range field.Names {
-				typeStr := getFieldType(field.Type)
-				targetFields = append(targetFields, TargetField{
-					name:     name.Name,
-					typeName: typeStr,
-				})
+				typeName := getFieldType(field.Type)
+				targetFields = append(targetFields, *ts.NewTargetField(name.Name, typeName))
 			}
 		}
 		return true
 	})
 
-	gs := TargetStruct{
-		packageName: packageName,
-		structName:  targetStruct,
-		fields:      targetFields,
-	}
-	return gs
+	return *ts.NewTaregtStruct(packageName, s.structName, targetFields)
 }
 
 func getFieldType(expr ast.Expr) string {
