@@ -55,7 +55,7 @@ func (g *Generator) generate(ts targetstruct.TargetStruct) *jen.File {
 	f := jen.NewFile(ts.PackageName())
 
 	// コメント追加
-	f.Comment(constant.COMMENT)
+	f.Comment(constant.COMMENT + " " + constant.BEGIN_COMMENT)
 
 	// Builder struct作成
 	f.Type().Id(ts.GetBuilderName()).Struct(
@@ -89,7 +89,7 @@ func (g *Generator) generate(ts targetstruct.TargetStruct) *jen.File {
 	).Op("*").Id(ts.GetBuilderName()).Block(g.GetMoveFieldStatement(ts)...)
 
 	// コメント追加
-	f.Comment(constant.COMMENT)
+	f.Comment(constant.COMMENT + " " + constant.END_COMMENT)
 
 	return f
 }

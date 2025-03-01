@@ -48,7 +48,7 @@ func (t *BuilderFile) IsInvalidComment() error {
 
 	count := 0
 	for _, line := range t.lines {
-		if strings.TrimSpace(line) == constant.COMMENT {
+		if strings.HasPrefix(strings.TrimSpace(line), constant.COMMENT) {
 			count++
 		}
 	}
@@ -83,7 +83,7 @@ func (t *BuilderFile) splitLines() {
 	beforeLines := []string{}
 	afterLines := []string{}
 	for _, line := range t.lines {
-		if strings.TrimSpace(line) == constant.COMMENT {
+		if strings.HasPrefix(strings.TrimSpace(line), constant.COMMENT) {
 			count++
 			continue
 		}
